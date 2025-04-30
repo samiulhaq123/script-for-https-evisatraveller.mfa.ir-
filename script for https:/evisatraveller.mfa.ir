@@ -1,0 +1,207 @@
+// ==UserScript==
+// @name         Combined Script: Auto Upload, Save Proceed, Zone Selection, and Tab Title Change
+// @namespace    http://tampermonkey.net/
+// @version      1.9.1
+// @description  Combines Auto Upload, Save & Proceed with stylish buttons for visa zone selection and modifies tab title and icon on confirm pages
+// @author       Muhammad & Khasrow
+// @match        https://evisatraveller.mfa.ir/en/request/applyrequest/
+// @match        https://evisatraveller.mfa.ir/en/request/confirm/*
+// @grant        none
+// ==/UserScript==
+
+(function() {
+    'use strict';
+
+    // ====================  Auto Upload and Save Proceed ====================
+
+    const style = document.createElement('style');
+    style.textContent = `
+        .custom-btn {
+            position: fixed;
+            right: 20px;
+            z-index: 9999;
+            color: rgb(26, 179, 148);
+            padding: 6px 12px;
+            font-size: 16px;
+            border: 0.8px solid rgb(26, 179, 148);
+            border-radius: 6px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: inherit;
+            transform: scale(1);
+            white-space: nowrap;
+            background-color: rgba(255, 255, 255, 0);
+            font-weight: bold;
+        }
+
+        .custom-btn:hover {
+            background-color: rgb(26, 179, 148);
+            color: white;
+            transform: scale(1.08);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+        }
+    `;
+    document.head.appendChild(style);
+
+    function triggerFileInput(id) {
+        const input = document.getElementById(id);
+        if (input) input.click();
+    }
+
+    function createUploadButton() {
+        if (document.querySelector('#auto-upload-button')) return;
+
+        const button = document.createElement('button');
+        button.id = 'auto-upload-button';
+        button.textContent = '📤 Upload All Photos';
+        button.className = 'custom-btn';
+        button.style.top = '64px';
+
+        button.addEventListener('click', function() {
+            triggerFileInput('id_picture');
+            triggerFileInput('id_passport_image');
+            triggerFileInput('id_extra_country_2221');
+            triggerFileInput('id_extra_country_223');
+        });
+
+        document.body.appendChild(button);
+    }
+
+    function mainSaveAndProceedFunction() {
+        try {
+            const mainSaveButton = document.querySelector('button#first_step_submit_btn');
+            const mainSaveButton2 = document.querySelector('button#second_step_submit_btn');
+            if (mainSaveButton) mainSaveButton.click();
+            else if (mainSaveButton2) mainSaveButton2.click();
+            else console.log("دکمه ذخیره پیدا نشد.");
+        } catch (e) {
+            console.error('خطا در اجرای دکمه:', e);
+        }
+    }
+
+    function createSaveAndProceedButton() {
+        if (document.querySelector('#saveAndProceedButton')) return;
+
+        const button = document.createElement('button');
+        button.id = 'saveAndProceedButton';
+        button.textContent = '💾 Save and Proceed';
+        button.className = 'custom-btn';
+        button.style.top = '21px';
+
+        button.addEventListener('click', mainSaveAndProceedFunction);
+
+        document.addEventListener('keydown', function(event) {
+            if (event.ctrlKey && (event.key === 's' || event.key === 'S')) {
+                event.preventDefault();
+                mainSaveAndProceedFunction();
+            }
+        });
+
+        document.body.appendChild(button);
+    }
+
+    const observer1 = new MutationObserver(createUploadButton);
+    observer1.observe(document.body, { childList: true, subtree: true });
+
+    const observer2 = new MutationObserver(createSaveAndProceedButton);
+    observer2.observe(document.body, { childList: true, subtree: true });
+
+    createUploadButton();
+    createSaveAndProceedButton();
+
+    // ====================  Zone Selection ====================
+
+    let submitBtn = document.querySelector('#first_step_submit_btn');
+    if (submitBtn) {
+        const createButton = (text, top) => {
+            const btn = document.createElement('button');
+            btn.innerText = text;
+            btn.className = 'custom-btn';
+            btn.style.top = top;
+            return btn;
+        };
+
+        const jalalabad = createButton('Jalalabad Entry', '107px');
+        const kabulTourist = createButton('Kabul Tourist', '157px');
+        const kabulEntry = createButton('Kabul Entry', '207px');
+
+        document.body.appendChild(jalalabad);
+        document.body.appendChild(kabulTourist);
+        document.body.appendChild(kabulEntry);
+
+        function fillAndSubmit(visaType, nationality, passportType, issuerAgent) {
+            const values = [
+                { id: 'id_visa_type', value: visaType },
+                { id: 'id_nationality', value: nationality },
+                { id: 'id_passport_type', value: passportType },
+                { id: 'id_issuer_agent', value: issuerAgent }
+            ];
+
+            values.forEach(item => {
+                let selectBox = document.getElementById(item.id);
+                if (selectBox) {
+                    selectBox.value = item.value;
+                    let changeEvent = new Event('change');
+                    selectBox.dispatchEvent(changeEvent);
+                }
+            });
+
+            submitBtn.click();
+        }
+
+        jalalabad.addEventListener('click', () => fillAndSubmit('1', '21', '1', '491'));
+        kabulTourist.addEventListener('click', () => fillAndSubmit('11', '21', '1', '461'));
+        kabulEntry.addEventListener('click', () => fillAndSubmit('1', '21', '1', '461'));
+    }
+
+    // ====================  Tab Title and Icon Modification ====================
+
+    let soundPlayedCount = 0;
+
+    function playSound(message) {
+        if (soundPlayedCount < 3) {
+            const utterance = new SpeechSynthesisUtterance(message);
+            window.speechSynthesis.speak(utterance);
+            soundPlayedCount++;
+        }
+    }
+
+    function checkUrlAndExecute() {
+        const currentUrl = window.location.href;
+
+        const confirmUrlPattern = /https:\/\/evisatraveller\.mfa\.ir\/en\/request\/confirm\/[A-Za-z0-9]+/;
+        if (confirmUrlPattern.test(currentUrl)) {
+            document.title = "Confirm Page";
+
+            const link = document.querySelector("link[rel='icon']") || document.createElement('link');
+            link.setAttribute("rel", "icon");
+            link.setAttribute("href", "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='%23FF0000' d='M8 12s4-3.2 4-5c0-2.1-2-3-3-3s-2 1-2 2c0-1-1-2-2-2s-3 .9-3 3c0 1.8 4 5 4 5z'/%3E%3C/svg%3E");
+            document.head.appendChild(link);
+
+            playSound("Your link is ready");
+            console.log("Your link is ready");
+
+            const heartIcon = document.createElement('span');
+            heartIcon.textContent = "❤";
+            heartIcon.style.fontSize = '50px';
+            heartIcon.style.position = 'fixed';
+            heartIcon.style.top = '10px';
+            heartIcon.style.right = '10px';
+            heartIcon.style.zIndex = '9999';
+            heartIcon.style.color = 'red';
+            heartIcon.style.fontWeight = 'bold';
+            document.body.appendChild(heartIcon);
+        }
+    }
+
+    function listenForUrlChanges() {
+        setInterval(() => {
+            checkUrlAndExecute();
+        }, 1000);
+    }
+
+    checkUrlAndExecute();
+    listenForUrlChanges();
+
+})();
